@@ -1,0 +1,64 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+	/*Insrtuction Handling*/ 
+	//load A and load D pins
+	Not(in=instruction[15], out=Ainstruct);
+	Not(in=Ainstruct, out=Cinstruct);
+	And(a=instruction[4], b=Cinstruct, out=loadD);
+	Or(a=instruction[5], b=Ainstruct, out=loadA);	
+	
+	/* proceed in making the instruction handling part*/
+	And(a=Cinstruct, b=instruction[12], out=AorM);
+	Mux16(a=instruction, b=ALUout, sel=Cinstruct, out=Ain);
+	ARegister(in=Ain, load=loadA, out=A, out[0..14]=addressM);	/*A register*/	/*ADDRESSM COMPLETE*/
+	Mux16(a=A, b=inM, sel=AorM , out= ALUinA);	/*instruction handling done*/
+	DRegister(in=ALUout, load=loadD, out=D);		/*D register*/
+	ALU(x=D, y=ALUinA, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out=ALUout,  out=outM, zr=zr, ng=ng);	/*OUTM COMPLETE*/
+	And(a=Cinstruct, b=instruction[3], out=writeM);		/*WRITEM COMPLETE*/
+
+	/* Program counter part*/
+		Not(in=zr, out=notzr);
+		Not(in=ng, out=notng);
+		Mux(a=false, b=true, sel=instruction[15], out=jmpsignal);
+		DMux8Way(in=jmpsignal, sel=instruction[0..2], a=null, b=jgt, c=jeq, d=jge, e=jlt, f=jne, g=jle, h=jmp);
+		/*null jump*/
+		/*Greater than jump*/
+		And(a=notzr, b=notng, out=jgthelp);
+		And(a=jgt, b=jgthelp, out=jmp2);
+		/*equal to jump*/
+		And(a=zr, b=notng, out=jeqhelp);
+		And(a=jeqhelp, b=jeq, out=jmp3);	
+		/*Greater or equal to jump*/
+		And(a=jge, b=notng, out=jmp4);
+		/*Jump less than*/
+		And(a=notzr, b=ng, out=jlthelp);
+		And(a=jlt, b=jlthelp, out=jmp5);
+		/*Not equal jump*/
+		And(a=jne, b=notzr, out=jmp6);
+		/*Less than equal jump_*/
+		Nand(a=notzr, b=notng, out=jlehelp);
+		And(a=jle, b=jlehelp, out=jmp7);
+		/*uncoonditional jump*/
+		//no implementation needed
+		Or8Way(in[0]=false, in[1]=jmp2, in[2]=jmp3, in[3]=jmp4, in[4]=jmp5, in[5]=jmp6, in[6]=jmp7, in[7]=jmp, out=PCload); //feed the output of the or gate to the load pin of the register	
+		/*PC register implementation*/
+		PC(in=A, load=PCload, inc=true, reset=reset, out[0..14]=pc);
+	
+	}
